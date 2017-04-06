@@ -18,6 +18,9 @@
 #define WIDTH 1280
 #define HEIGHT 720
 
+#define ROIWIDTH 64
+#define ROIHEIGHT 64
+
 #define IDL 0
 #define ACQ 1
 #define TRK 2
@@ -99,9 +102,9 @@ int main(int argc, char *argv[])
     unsigned char configByte;
     int TRKmode = IDL;
     int reqTRKmode = IDL;
-    int filterType = 3; //0 = none, 1 = 3x3mean, 2 = 3x3 median, 3 = 5x5 median, 4 = 3x3median 2 pass
+    int filterType = 2; //0 = none, 1 = 3x3mean, 2 = 3x3 median, 3 = 5x5 median, 4 = 3x3median 2 pass
     int enSobelEdge = 1;
-    int enBinarise = 0;
+    int enBinarise = 1;
     int enCombine = 0;
     int enCombineFiltering = 0;
     int width = WIDTH;
@@ -110,8 +113,9 @@ int main(int argc, char *argv[])
     
     int sum, max;
     float mean, thresh;
-    float threshFactor = 0.25;
+    float threshFactor = 0.70;
     float fps;
+    int frame = 0;
     
     
     
@@ -120,8 +124,10 @@ int main(int argc, char *argv[])
     unsigned char receiveBuffer[WIDTH*HEIGHT];
     unsigned char sendBuffer[WIDTH*HEIGHT];
     int vecSize = WIDTH*HEIGHT;
+    int ROISize = ROIWIDTH*ROIHEIGHT;
     std::vector<unsigned char> h_frame_in(vecSize);
     std::vector<unsigned char> h_frame_out(vecSize);
+    std::vector<unsigned char> h_ROI_data(ROISize);
     
     //--------------OPENCL INIT--------------------//
     cl::Program program;
@@ -199,6 +205,7 @@ int main(int argc, char *argv[])
     cl::Buffer d_frame_in(context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, sizeof(unsigned char) * h_frame_in.size(), h_frame_in.data());
     cl::Buffer d_original_frame(context, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR, sizeof(unsigned char)*h_frame_in.size(), h_frame_in.data());
     cl::Buffer d_frame_out(context, CL_MEM_READ_WRITE, sizeof(unsigned char)*h_frame_out.size());
+    cl::Buffer d_ROI(context, CL_MEM_READ_WRITE, sizeof(unsigned char) * h_ROI_data.size());
     
     cl::Kernel meanKernel(program, "MeanFilter");
     cl::Kernel medianKernel3(program, "MedianFilter3");
@@ -206,6 +213,8 @@ int main(int argc, char *argv[])
     cl::Kernel sobelKernel(program, "SobelEdge");
     cl::Kernel binKernel(program, "Binarise");
     cl::Kernel combineKernel(program, "CombineImages");
+    cl::Kernel extractKernel(program, "ExtractROI");
+    cl::Kernel insertKernel(program, "InsertROI");
     
     
     //------------TCP SERVER INIT--------------//
@@ -243,6 +252,15 @@ int main(int argc, char *argv[])
         
         //--------------------TCP RECEIVE----------------//
         TCPReceive(newsockfd, receiveBuffer);
+        
+        for (y = 0; y < HEIGHT; y++)
+        {
+            for (x = 0; x < WIDTH-1; x++)
+            {
+                //std::cout << "Accessing Element: " << (y*WIDTH+x) << std::endl;
+                h_frame_in[y*WIDTH + x] = receiveBuffer[y*WIDTH + x];
+            }
+        }
         //std::cout << "Frame Received" << std::endl;
         
         //----------Get and decode decode bytes-------------//
@@ -253,6 +271,7 @@ int main(int argc, char *argv[])
         enCombine = ((0x01 << 4) & configByte) >> 4;
         enCombineFiltering = ((0x01 << 5) & configByte) >> 5;
         abort = ((0x01 << 6) & configByte) >> 6;
+        std::cout << (int)configByte << std::endl;
         
         ROI.size = h_frame_in[1];
         ROI.xMSB = h_frame_in[2];
@@ -260,6 +279,7 @@ int main(int argc, char *argv[])
         ROI.yMSB = h_frame_in[4];
         ROI.yLSB = h_frame_in[5];
         //ROI.mode = h_frame_in[6];
+        reqTRKmode = h_frame_in[7];
         
         TRKmode = reqTRKmode;
         
@@ -273,14 +293,7 @@ int main(int argc, char *argv[])
         //----------------PROCESSING----------------------//
         std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
         
-        for (y = 0; y < HEIGHT; y++)
-        {
-            for (x = 0; x < WIDTH-1; x++)
-            {
-                //std::cout << "Accessing Element: " << (y*WIDTH+x) << std::endl;
-                h_frame_in[y*WIDTH + x] = receiveBuffer[y*WIDTH + x];
-            }
-        }
+
         
         
         
@@ -430,6 +443,44 @@ int main(int argc, char *argv[])
         }
         
         
+        if(TRKmode == ACQ || TRKmode == TRK)
+        {
+            //EXTRACT ROI FOR CENTROID DETECTION
+            extractKernel.setArg(0, d_frame_out);
+            extractKernel.setArg(1, d_ROI);
+            extractKernel.setArg(2, width);
+            extractKernel.setArg(3, height);
+            extractKernel.setArg(4, ROI.x);
+            extractKernel.setArg(5, ROI.y);
+            extractKernel.setArg(6, ROI.size);
+            extractKernel.setArg(7, ROI.size);
+            
+            queue.enqueueNDRangeKernel(extractKernel, cl::NullRange, cl::NDRange(width, height), cl::NullRange, NULL, NULL);
+            queue.finish();
+            //queue.enqueueReadBuffer(d_ROI, CL_TRUE, 0, sizeof(unsigned char) * h_ROI_data.size(), h_ROI_data.data());
+            
+            insertKernel.setArg(0, d_frame_out);
+            insertKernel.setArg(1, d_ROI);
+            insertKernel.setArg(2, d_frame_in);
+            insertKernel.setArg(3, ROI.x);
+            insertKernel.setArg(4, ROI.y);
+            insertKernel.setArg(5, ROI.size);
+            insertKernel.setArg(6, ROI.size);
+            insertKernel.setArg(7, width);
+            insertKernel.setArg(8, height);
+            
+            queue.enqueueNDRangeKernel(insertKernel, cl::NullRange, cl::NDRange(width, height), cl::NullRange, NULL, NULL);
+            queue.finish();
+            queue.enqueueReadBuffer(d_frame_in, CL_TRUE, 0, sizeof(unsigned char) * h_frame_out.size(), h_frame_out.data());
+        }
+        
+        if(TRKmode == ACQ)
+        {
+            //Centroid_t centroid = detectCentroids(h_ROI_data);
+            //if(centroid.present) TRKmode = TRK;
+        }
+
+        
         
         for (y = 0; y < HEIGHT; y++)
         {
@@ -439,17 +490,25 @@ int main(int argc, char *argv[])
             }
         }
         
+        sendBuffer[1] = ROI.size;
+        sendBuffer[2] = ROI.xMSB;
+        sendBuffer[3] = ROI.xLSB;
+        sendBuffer[4] = ROI.yMSB;
+        sendBuffer[5] = ROI.yLSB;
+        sendBuffer[6] = TRKmode;
+        
         std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::microseconds>(t2-t1).count();
         fps = 1000000/duration;
         
-        std::cout << fps << std::endl;
+        //std::cout << fps << std::endl;
         
         //----------------TCP Send------------------------//
         TCPSend(newsockfd, sendBuffer);
         
         
         //------------------------------------------------//
+        frame++;
     }
     close(newsockfd);
     close(sockfd);

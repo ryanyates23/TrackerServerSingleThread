@@ -25,7 +25,7 @@ __kernel void SobelEdge(__global uchar* in, __global uchar* out, const int width
         dy = -data[0] - 2*data[1] - data[2] + data[6] + 2*data[7] + data[8];
         
         dout = sqrt(dx*dx + dy*dy);
-//        dout = dy;
+        //        dout = dy;
         
         if(dout > 255) out[offset] = 255;
         else if(dout < 0) out[offset] = 0;
@@ -35,7 +35,7 @@ __kernel void SobelEdge(__global uchar* in, __global uchar* out, const int width
     }
     else out[offset] = 0;
     
-
+    
 }
 
 __kernel void MeanFilter(__global uchar* in, __global uchar* out, const int width, const int height)
@@ -194,7 +194,7 @@ __kernel void CombineImages(__global uchar* in1, __global uchar* in2, global uch
     
     int offset = y*width + x;
     int temp;
-
+    
     
     temp = in1[offset] + in2[offset];
     if (temp > 255) out[offset] = 255; else out[offset] = temp;
