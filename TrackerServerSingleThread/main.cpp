@@ -18,10 +18,36 @@
 #define WIDTH 1280
 #define HEIGHT 720
 
+#define IDL 0
+#define ACQ 1
+#define TRK 2
+
+
+
 //#define WIDTH 1024
 //#define HEIGHT 576
 
 //using namespace std;
+
+struct ROI_t {
+    int x;
+    int y;
+    unsigned char size;
+    unsigned char xLSB;
+    unsigned char xMSB;
+    unsigned char yLSB;
+    unsigned char yMSB;
+    unsigned char mode;
+    unsigned char reqMode;
+} ROI;
+
+struct Centroid_t {
+    int x;
+    int y;
+    int width;
+    int height;
+    int present;
+};
 
 void error(const char *msg)
 {
@@ -29,13 +55,50 @@ void error(const char *msg)
     exit(1);
 }
 
+void TCPSend(int socket, unsigned char* buffer)
+{
+    int totalBytesWritten = 0;
+    int vecSize = WIDTH*HEIGHT;
+    int n;
+    while(totalBytesWritten != vecSize)
+    {
+        n = (int)write(socket,&buffer[totalBytesWritten],vecSize);
+        //cout << "Bytes Written: " << n << endl;
+        if (n < 0)
+            error("ERROR writing to socket");
+        totalBytesWritten += n;
+    }
+}
+
+void TCPReceive(int socket, unsigned char* buffer)
+{
+    int totalBytesRead = 0;
+    int vecSize = WIDTH*HEIGHT;
+    bzero(buffer,vecSize);
+    int n;
+    totalBytesRead = 0;
+    while(totalBytesRead != vecSize)
+    {
+        n = (int)read(socket,&buffer[totalBytesRead],vecSize - totalBytesRead);
+        if (n < 0) error("ERROR reading from socket");
+        
+        totalBytesRead += n;
+    }
+}
+
+
+
 int main(int argc, char *argv[])
 {
     //-------------BASIC INIT--------------------//
     //    int argc = 51717;
     //    char *argv = "localhost";
     int x, y;
+    
     //int displayFrame = 0;
+    unsigned char configByte;
+    int TRKmode = IDL;
+    int reqTRKmode = IDL;
     int filterType = 3; //0 = none, 1 = 3x3mean, 2 = 3x3 median, 3 = 5x5 median, 4 = 3x3median 2 pass
     int enSobelEdge = 1;
     int enBinarise = 0;
@@ -43,6 +106,7 @@ int main(int argc, char *argv[])
     int enCombineFiltering = 0;
     int width = WIDTH;
     int height = HEIGHT;
+    int abort = 0;
     
     int sum, max;
     float mean, thresh;
@@ -145,13 +209,10 @@ int main(int argc, char *argv[])
     
     
     //------------TCP SERVER INIT--------------//
-    int totalBytesRead;
-    int totalBytesWritten;
     int sockfd, newsockfd, portno;
     socklen_t clilen;
     //char buffer[256];
     struct sockaddr_in serv_addr, cli_addr;
-    int n;
     if (argc < 2) {
         fprintf(stderr,"ERROR, no port provided\n");
         exit(1);
@@ -181,18 +242,33 @@ int main(int argc, char *argv[])
     {
         
         //--------------------TCP RECEIVE----------------//
-        bzero(receiveBuffer,vecSize);
-        totalBytesRead = 0;
-        while(totalBytesRead != vecSize)
-        {
-            n = (int)read(newsockfd,&receiveBuffer[totalBytesRead],vecSize - totalBytesRead);
-            if (n < 0) error("ERROR reading from socket");
-            
-            totalBytesRead += n;
-        }
+        TCPReceive(newsockfd, receiveBuffer);
         //std::cout << "Frame Received" << std::endl;
         
-        //---------------DISPLAY FRAME------------------//
+        //----------Get and decode decode bytes-------------//
+        configByte = h_frame_in[0];
+        filterType = (0x03) & configByte;
+        enSobelEdge = ((0x01 << 2) & configByte) >> 2;
+        enBinarise = ((0x01 << 3) & configByte) >> 3;
+        enCombine = ((0x01 << 4) & configByte) >> 4;
+        enCombineFiltering = ((0x01 << 5) & configByte) >> 5;
+        abort = ((0x01 << 6) & configByte) >> 6;
+        
+        ROI.size = h_frame_in[1];
+        ROI.xMSB = h_frame_in[2];
+        ROI.xLSB = h_frame_in[3];
+        ROI.yMSB = h_frame_in[4];
+        ROI.yLSB = h_frame_in[5];
+        //ROI.mode = h_frame_in[6];
+        
+        TRKmode = reqTRKmode;
+        
+        
+        //        std::cout << "Mode: " << TRKmode << std::endl;
+        
+        ROI.x = (int)ROI.xMSB*256 + (int)ROI.xLSB;
+        ROI.y = (int)ROI.yMSB*256 + (int)ROI.yLSB;
+
         
         //----------------PROCESSING----------------------//
         std::chrono::high_resolution_clock::time_point t1 = std::chrono::high_resolution_clock::now();
@@ -370,15 +446,7 @@ int main(int argc, char *argv[])
         std::cout << fps << std::endl;
         
         //----------------TCP Send------------------------//
-        totalBytesWritten = 0;
-        while(totalBytesWritten != vecSize)
-        {
-            n = (int)write(newsockfd,&sendBuffer[totalBytesWritten],vecSize);
-            //std::cout << "Bytes Written: " << n << std::endl;
-            if (n < 0)
-                error("ERROR writing to socket");
-            totalBytesWritten += n;
-        }
+        TCPSend(newsockfd, sendBuffer);
         
         
         //------------------------------------------------//
