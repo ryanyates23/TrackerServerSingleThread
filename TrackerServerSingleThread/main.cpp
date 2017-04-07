@@ -18,12 +18,14 @@
 #define WIDTH 1280
 #define HEIGHT 720
 
-#define ROIWIDTH 64
-#define ROIHEIGHT 64
+#define ROIWIDTH 128
+#define ROIHEIGHT 128
 
 #define IDL 0
 #define ACQ 1
 #define TRK 2
+
+#define SHOWDEBUG 0
 
 
 
@@ -42,6 +44,10 @@ struct ROI_t {
     unsigned char yMSB;
     unsigned char mode;
     unsigned char reqMode;
+    unsigned char xTGT;
+    unsigned char yTGT;
+    unsigned char wTGT;
+    unsigned char hTGT;
 } ROI;
 
 struct Centroid_t {
@@ -49,6 +55,7 @@ struct Centroid_t {
     int y;
     int width;
     int height;
+    int sum;
     int present;
 };
 
@@ -93,27 +100,119 @@ Centroid_t detectCentroids(std::vector<unsigned char> ROI)
 {
     Centroid_t detectedCentroid;
     detectedCentroid.present = 0;
+    Centroid_t biggestCentroid;
+    biggestCentroid.sum = 0;
+    biggestCentroid.x = 0;
+    biggestCentroid.y = 0;
+    biggestCentroid.width = 0;
+    biggestCentroid.height = 0;
+    biggestCentroid.present = 0;
+    int centroidGrown = 1;
+    int centroidSum = 0;
+    int centroidSumLast = 0;
+    int dispPix = 0;
+    
+    int growLeft = 1;
+    int growRight = 1;
+    int growUp = 1;
+    int growDown = 1;
+    
+    int xBoundLow = 0;
+    int xBoundHigh = 0;
+    int yBoundLow = 0;
+    int yBoundHigh = 0;
+    int tmp = 0;
+    
+    if(SHOWDEBUG)
+    {
+        for(int y = 0; y < ROIHEIGHT; y++)
+        {
+            for(int x = 0; x < ROIWIDTH; x++)
+            {
+                if (ROI[y*ROIWIDTH+x] > 0) dispPix = 1; else dispPix = 0;
+                std::cout << dispPix;
+            }
+            std::cout << std::endl;
+        }
+    }
     
     for(int y = 0; y < ROIHEIGHT; y++)
     {
         for(int x = 0; x < ROIWIDTH; x++)
         {
-            if(ROI[y*ROIWIDTH + x] > 0)
+            if((y < biggestCentroid.y || y > biggestCentroid.y + biggestCentroid.height) && (x < biggestCentroid.x || x > biggestCentroid.x + biggestCentroid.width))
             {
-                detectedCentroid.x = x;
-                detectedCentroid.y = y;
-                detectedCentroid.width = 1;
-                detectedCentroid.height = 1;
-                detectedCentroid.present = 1;
-                
-                
+                //get each positive pixel
+                if(ROI[y*ROIWIDTH + x] > 0)
+                {
+                    centroidSum = 0;
+                    centroidSumLast = 0;
+                    xBoundLow = x;
+                    xBoundHigh = x;
+                    yBoundLow = y;
+                    yBoundHigh = y;
+                    growLeft = 1;
+                    growRight = 1;
+                    growUp = 1;
+                    growDown = 1;
+                    centroidGrown = 1;
+                    tmp++;
+                    while(centroidGrown == 1)
+                    {
+                        if(xBoundLow > 0 && growLeft == 1) xBoundLow--;
+                        if(xBoundHigh < ROIWIDTH && growRight == 1) xBoundHigh++;
+                        if(yBoundLow > 0 && growUp == 1) yBoundLow--;
+                        if(yBoundHigh < ROIHEIGHT && growDown == 1) yBoundHigh++;
+                        growLeft = 0;
+                        growRight = 0;
+                        growUp = 0;
+                        growDown = 0;
+                        //tmp = 0;
+                        centroidSum = 0;
+                        //get surrounding pixels
+                        for(int j = yBoundLow; j <= yBoundHigh; j++)
+                        {
+                            for(int i = xBoundLow; i <= xBoundHigh; i++)
+                            {
+                                if(ROI[j*ROIWIDTH + i] > 0)
+                                {
+                                    centroidSum++;
+                                    if(i == xBoundLow) growLeft = 1;
+                                    if(i == xBoundHigh) growRight = 1;
+                                    if(j == yBoundLow) growUp = 1;
+                                    if(j == yBoundHigh) growDown = 1;
+                                }
+                                
+                            }
+                        }
+                        if(centroidSum > centroidSumLast)
+                        {
+                            centroidGrown = 1;
+                        }
+                        else centroidGrown = 0;
+                        centroidSumLast = centroidSum;
+                    }
+                    if(centroidSum > 0)
+                    {
+                        if(centroidSum > biggestCentroid.sum)
+                        {
+                            biggestCentroid.sum = centroidSum;
+                            biggestCentroid.width = xBoundHigh - xBoundLow - 1;
+                            biggestCentroid.height = yBoundHigh - yBoundLow - 1;
+                            biggestCentroid.x = xBoundLow;// - biggestCentroid.width/2;
+                            biggestCentroid.y = yBoundLow;// - biggestCentroid.height/2;
+                            biggestCentroid.present = 1;
+                        }
+                    }
+                    
+                }
             }
-            //std::cout << (int)ROI[y*ROIWIDTH + x];
+            
         }
-        //std::cout << std::endl;
+        
     }
-    
-    return detectedCentroid;
+    std::cout << "Pixels Processed: " << tmp << std::endl;
+    return biggestCentroid;
 }
 
 int main(int argc, char *argv[])
@@ -296,7 +395,7 @@ int main(int argc, char *argv[])
         enCombine = ((0x01 << 4) & configByte) >> 4;
         enCombineFiltering = ((0x01 << 5) & configByte) >> 5;
         abort = ((0x01 << 6) & configByte) >> 6;
-        std::cout << (int)configByte << std::endl;
+        //std::cout << (int)configByte << std::endl;
         
         ROI.size = h_frame_in[1];
         ROI.xMSB = h_frame_in[2];
@@ -437,7 +536,7 @@ int main(int argc, char *argv[])
         if(TRKmode == ACQ || TRKmode == TRK)
         {
             //EXTRACT ROI FOR CENTROID DETECTION
-            std::cout << "ROI - x: " << ROI.x << " y: " << ROI.y << " size: " << (int)ROI.size << std::endl;
+            //std::cout << "ROI - x: " << ROI.x << " y: " << ROI.y << " size: " << (int)ROI.size << std::endl;
             extractKernel.setArg(0, d_frame_out);
             extractKernel.setArg(1, d_ROI);
             extractKernel.setArg(2, width);
@@ -446,8 +545,8 @@ int main(int argc, char *argv[])
             extractKernel.setArg(5, ROI.y);
 //            extractKernel.setArg(6, ROI.size);
 //            extractKernel.setArg(7, ROI.size);
-            extractKernel.setArg(6, 64);
-            extractKernel.setArg(7, 64);
+            extractKernel.setArg(6, ROIWIDTH);
+            extractKernel.setArg(7, ROIHEIGHT);
             
             queue.enqueueNDRangeKernel(extractKernel, cl::NullRange, cl::NDRange(width, height), cl::NullRange, NULL, NULL);
             queue.finish();
@@ -457,8 +556,17 @@ int main(int argc, char *argv[])
             if(centroid.present)
             {
                TRKmode = TRK;
-                ROI.x = (centroid.x + ROI.x) - ROI.size/2;
-                ROI.y = (centroid.y + ROI.y) - ROI.size/2;
+                ROI.xTGT = centroid.x;// - centroid.width/2;
+                ROI.yTGT = centroid.y;// - centroid.height/2;
+                ROI.wTGT = centroid.width;
+                ROI.hTGT = centroid.height;
+                ROI.x = (centroid.x + ROI.x) - ROI.size/2 + ROI.wTGT/2;
+                ROI.y = (centroid.y + ROI.y) - ROI.size/2 + ROI.hTGT/2;
+                if(ROI.x > WIDTH-ROI.size) ROI.x = WIDTH-ROI.size;
+                if(ROI.x < 0) ROI.x = 0;
+                if(ROI.y > HEIGHT - ROI.size) ROI.y = HEIGHT - ROI.size;
+                if(ROI.y < 0) ROI.y = 0;
+                
             }
             
             
@@ -469,10 +577,7 @@ int main(int argc, char *argv[])
         
         //------------Detect the centroids-----------//
         
-        if(TRKmode == ACQ)
-        {
-            
-        }
+
 
         
         
@@ -495,6 +600,10 @@ int main(int argc, char *argv[])
         sendBuffer[4] = ROI.yMSB;
         sendBuffer[5] = ROI.yLSB;
         sendBuffer[6] = TRKmode;
+        sendBuffer[7] = ROI.xTGT;
+        sendBuffer[8] = ROI.yTGT;
+        sendBuffer[9] = ROI.wTGT;
+        sendBuffer[10] = ROI.hTGT;
         
         std::chrono::high_resolution_clock::time_point t2 = std::chrono::high_resolution_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::microseconds>(t2-t1).count();
