@@ -202,8 +202,8 @@ __kernel void CombineImages(__global uchar* in1, __global uchar* in2, global uch
 
 __kernel void ExtractROI(__global uchar* frame_in,
                          __global uchar* ROI_out,
-                         const int widthFrame,
-                         const int heightFrame,
+                         const int frameWidth,
+                         const int frameHeight,
                          const int ROIx,
                          const int ROIy,
                          const int ROIwidth,
@@ -213,7 +213,7 @@ __kernel void ExtractROI(__global uchar* frame_in,
     int x = get_global_id(0);
     int y = get_global_id(1);
     
-    int offset = y*widthFrame + x;
+    int offset = y*frameWidth + x;
     int ROIoffset;
     
     if(x >= ROIx && x <= ROIx + ROIwidth && y >= ROIy && y <= ROIy + ROIheight)

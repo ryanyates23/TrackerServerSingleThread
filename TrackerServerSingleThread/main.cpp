@@ -89,7 +89,32 @@ void TCPReceive(int socket, unsigned char* buffer)
     }
 }
 
-
+Centroid_t detectCentroids(std::vector<unsigned char> ROI)
+{
+    Centroid_t detectedCentroid;
+    detectedCentroid.present = 0;
+    
+    for(int y = 0; y < ROIHEIGHT; y++)
+    {
+        for(int x = 0; x < ROIWIDTH; x++)
+        {
+            if(ROI[y*ROIWIDTH + x] > 0)
+            {
+                detectedCentroid.x = x;
+                detectedCentroid.y = y;
+                detectedCentroid.width = 1;
+                detectedCentroid.height = 1;
+                detectedCentroid.present = 1;
+                
+                
+            }
+            //std::cout << (int)ROI[y*ROIWIDTH + x];
+        }
+        //std::cout << std::endl;
+    }
+    
+    return detectedCentroid;
+}
 
 int main(int argc, char *argv[])
 {
@@ -300,85 +325,68 @@ int main(int argc, char *argv[])
         queue.enqueueWriteBuffer(d_frame_in, CL_TRUE, 0, sizeof(unsigned char)*h_frame_in.size(), h_frame_in.data());
         queue.enqueueWriteBuffer(d_original_frame, CL_FALSE, 0, sizeof(unsigned char)*h_frame_in.size(), h_frame_in.data());
         
-        if (filterType == 0)
+        if(filterType == 0)
         {
-            queue.enqueueWriteBuffer(d_frame_out, CL_TRUE, 0, sizeof(unsigned char)*h_frame_in.size(), h_frame_in.data());
+            queue.enqueueCopyBuffer(d_frame_in, d_frame_out, 0, 0, sizeof(unsigned char)*h_frame_in.size());
         }
-        
-        if (filterType == 1)
+        else if(filterType == 1)
         {
-            
-            meanKernel.setArg(0, d_frame_in);
-            meanKernel.setArg(1, d_frame_out);
-            meanKernel.setArg(2, width);
-            meanKernel.setArg(3, height);
-            
-            queue.enqueueNDRangeKernel(meanKernel, cl::NullRange, cl::NDRange(width, height));
-            
-            //queue.enqueueReadBuffer(d_frame_out, CL_TRUE, 0, sizeof(unsigned char)*h_frame_out.size(), h_frame_out.data());
-            //queue.finish();
-            //h_frame_in = h_frame_out;
+            {
+
+                meanKernel.setArg(0, d_frame_in);
+                meanKernel.setArg(1, d_frame_out);
+                meanKernel.setArg(2, width);
+                meanKernel.setArg(3, height);
+
+                queue.enqueueNDRangeKernel(meanKernel, cl::NullRange, cl::NDRange(width, height));
+            }
+
         }
-        else
+        else if(filterType == 2)
         {
-            //h_frame_out = h_frame_in;
-        }
-        if (filterType == 2)
-        {
-            
             medianKernel3.setArg(0, d_frame_in);
             medianKernel3.setArg(1, d_frame_out);
             medianKernel3.setArg(2, width);
             medianKernel3.setArg(3, height);
-            
+
             queue.enqueueNDRangeKernel(medianKernel3, cl::NullRange, cl::NDRange(width, height),cl::NullRange, NULL, NULL);
-            
-            //queue.enqueueReadBuffer(d_frame_out, CL_TRUE, 0, sizeof(unsigned char)*h_frame_out.size(), h_frame_out.data());
             queue.finish();
-            //h_frame_in = h_frame_out;
         }
-        else
+        else if(filterType == 3)
         {
-            //h_frame_out = h_frame_in;
-        }
-        if(filterType == 3)
-        {
-            
             medianKernel5.setArg(0, d_frame_in);
             medianKernel5.setArg(1, d_frame_out);
             medianKernel5.setArg(2, width);
             medianKernel5.setArg(3, height);
-            
+
             queue.enqueueNDRangeKernel(medianKernel5, cl::NullRange, cl::NDRange(width, height),cl::NullRange, NULL, NULL);
             queue.finish();
-            if(enCombine == 1 && enCombineFiltering == 1)
-            {
-                queue.enqueueCopyBuffer(d_frame_out, d_original_frame, 0, 0, vecSize);
-            }
+            
         }
         else
         {
-            //h_frame_out = h_frame_in;
+            queue.enqueueCopyBuffer(d_frame_in, d_frame_out, 0, 0, sizeof(unsigned char)*h_frame_in.size());
         }
-        if (enSobelEdge == 1)
+        
+        if(enSobelEdge == 1)
         {
-            
             sobelKernel.setArg(0, d_frame_out);
             sobelKernel.setArg(1, d_frame_in);
             sobelKernel.setArg(2, width);
             sobelKernel.setArg(3, height);
-            
+
             queue.enqueueNDRangeKernel(sobelKernel, cl::NullRange, cl::NDRange(width, height),cl::NullRange, NULL, NULL);
             queue.finish();
         }
         else
         {
-            h_frame_out = h_frame_in;
+            queue.enqueueCopyBuffer(d_frame_out, d_frame_in, 0, 0, sizeof(unsigned char)*h_frame_in.size());
         }
+            
         if(enBinarise == 1)
         {
             queue.enqueueReadBuffer(d_frame_in, CL_TRUE, 0, sizeof(unsigned char)*h_frame_in.size(), h_frame_in.data());
-            
+
             sum = 0;
             max = 0;
             for (y = 0; y < height; y++)
@@ -389,11 +397,11 @@ int main(int argc, char *argv[])
                     if(h_frame_in[y*width + x] > max) max = h_frame_in[y*width + x];
                 }
             }
-            
+
             mean = sum/(width*height);
             thresh = mean+((max-mean)*threshFactor);
-            
-            
+
+
             binKernel.setArg(0, d_frame_in);
             binKernel.setArg(1, d_frame_out);
             binKernel.setArg(2, width);
@@ -405,79 +413,65 @@ int main(int argc, char *argv[])
         }
         else
         {
-            //h_frame_out = h_frame_in;
+            queue.enqueueCopyBuffer(d_frame_in, d_frame_out, 0, 0, sizeof(unsigned char)*h_frame_in.size());
         }
-        
-        if (enCombine == 1 && enBinarise == 1)
+
+        if(enCombine == 1)
         {
-            
             combineKernel.setArg(0, d_frame_out);
             combineKernel.setArg(1, d_original_frame);
             combineKernel.setArg(2, d_frame_in);
             combineKernel.setArg(3, width);
             combineKernel.setArg(4, height);
-            
-            queue.enqueueNDRangeKernel(combineKernel, cl::NullRange, cl::NDRange(width, height),cl::NullRange, NULL, NULL);
-            queue.finish();
-        }
-        else if (enCombine == 1 && enBinarise == 0)
-        {
-            
-            combineKernel.setArg(0, d_frame_in);
-            combineKernel.setArg(1, d_original_frame);
-            combineKernel.setArg(2, d_frame_out);
-            combineKernel.setArg(3, width);
-            combineKernel.setArg(4, height);
-            
-            queue.enqueueNDRangeKernel(combineKernel, cl::NullRange, cl::NDRange(width, height),cl::NullRange, NULL, NULL);
-            queue.finish();
-        }
-        
-        if ((enBinarise == 0 && enCombine == 0) || (enBinarise == 1 && enCombine == 1))
-        {
-            queue.enqueueReadBuffer(d_frame_in, CL_TRUE, 0, sizeof(unsigned char)*h_frame_out.size(), h_frame_out.data());
         }
         else
         {
-            queue.enqueueReadBuffer(d_frame_out, CL_TRUE, 0, sizeof(unsigned char)*h_frame_out.size(), h_frame_out.data());
+            queue.enqueueCopyBuffer(d_frame_out, d_frame_in, 0, 0, sizeof(unsigned char)*h_frame_in.size());
         }
         
         
+        queue.enqueueReadBuffer(d_frame_in, CL_TRUE, 0, sizeof(unsigned char)*h_frame_out.size(), h_frame_out.data());
+
+        
+        //-----------EXTRACT THE ROI---------------//
         if(TRKmode == ACQ || TRKmode == TRK)
         {
             //EXTRACT ROI FOR CENTROID DETECTION
+            std::cout << "ROI - x: " << ROI.x << " y: " << ROI.y << " size: " << (int)ROI.size << std::endl;
             extractKernel.setArg(0, d_frame_out);
             extractKernel.setArg(1, d_ROI);
             extractKernel.setArg(2, width);
             extractKernel.setArg(3, height);
             extractKernel.setArg(4, ROI.x);
             extractKernel.setArg(5, ROI.y);
-            extractKernel.setArg(6, ROI.size);
-            extractKernel.setArg(7, ROI.size);
+//            extractKernel.setArg(6, ROI.size);
+//            extractKernel.setArg(7, ROI.size);
+            extractKernel.setArg(6, 64);
+            extractKernel.setArg(7, 64);
             
             queue.enqueueNDRangeKernel(extractKernel, cl::NullRange, cl::NDRange(width, height), cl::NullRange, NULL, NULL);
             queue.finish();
-            //queue.enqueueReadBuffer(d_ROI, CL_TRUE, 0, sizeof(unsigned char) * h_ROI_data.size(), h_ROI_data.data());
+            queue.enqueueReadBuffer(d_ROI, CL_TRUE, 0, sizeof(unsigned char) * h_ROI_data.size(), h_ROI_data.data());
             
-            insertKernel.setArg(0, d_frame_out);
-            insertKernel.setArg(1, d_ROI);
-            insertKernel.setArg(2, d_frame_in);
-            insertKernel.setArg(3, ROI.x);
-            insertKernel.setArg(4, ROI.y);
-            insertKernel.setArg(5, ROI.size);
-            insertKernel.setArg(6, ROI.size);
-            insertKernel.setArg(7, width);
-            insertKernel.setArg(8, height);
+            Centroid_t centroid = detectCentroids(h_ROI_data);
+            if(centroid.present)
+            {
+               TRKmode = TRK;
+                ROI.x = (centroid.x + ROI.x) - ROI.size/2;
+                ROI.y = (centroid.y + ROI.y) - ROI.size/2;
+            }
             
-            queue.enqueueNDRangeKernel(insertKernel, cl::NullRange, cl::NDRange(width, height), cl::NullRange, NULL, NULL);
-            queue.finish();
-            queue.enqueueReadBuffer(d_frame_in, CL_TRUE, 0, sizeof(unsigned char) * h_frame_out.size(), h_frame_out.data());
+            
+            else TRKmode = ACQ;
         }
+        
+        
+        
+        //------------Detect the centroids-----------//
         
         if(TRKmode == ACQ)
         {
-            //Centroid_t centroid = detectCentroids(h_ROI_data);
-            //if(centroid.present) TRKmode = TRK;
+            
         }
 
         
@@ -489,6 +483,11 @@ int main(int argc, char *argv[])
                 sendBuffer[y*WIDTH + x] = h_frame_out[y*WIDTH + x];
             }
         }
+        
+        ROI.xMSB = (ROI.x & 0xff00) >> 8;
+        ROI.xLSB = (ROI.x & 0x00ff);
+        ROI.yMSB = (ROI.y & 0xff00) >> 8;
+        ROI.yLSB = (ROI.y & 0x00ff);
         
         sendBuffer[1] = ROI.size;
         sendBuffer[2] = ROI.xMSB;
