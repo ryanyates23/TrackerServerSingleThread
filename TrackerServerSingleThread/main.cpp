@@ -27,6 +27,9 @@
 
 #define SHOWDEBUG 0
 
+#define MINCENTWIDTH 5
+#define MINCENTHEIGHT 5
+
 
 
 //#define WIDTH 1024
@@ -56,6 +59,7 @@ struct Centroid_t {
     int width;
     int height;
     int sum;
+    int size;
     int present;
 };
 
@@ -96,17 +100,10 @@ void TCPReceive(int socket, unsigned char* buffer)
     }
 }
 
-Centroid_t detectCentroids(std::vector<unsigned char> ROI)
+std::vector<Centroid_t> detectCentroids(std::vector<unsigned char> ROI)
 {
-    Centroid_t detectedCentroid;
-    detectedCentroid.present = 0;
-    Centroid_t biggestCentroid;
-    biggestCentroid.sum = 0;
-    biggestCentroid.x = 0;
-    biggestCentroid.y = 0;
-    biggestCentroid.width = 0;
-    biggestCentroid.height = 0;
-    biggestCentroid.present = 0;
+    std::vector<Centroid_t> centroids;
+    Centroid_t currentCentroid = {};
     int centroidGrown = 1;
     int centroidSum = 0;
     int centroidSumLast = 0;
@@ -140,7 +137,7 @@ Centroid_t detectCentroids(std::vector<unsigned char> ROI)
     {
         for(int x = 0; x < ROIWIDTH; x++)
         {
-            if((y < biggestCentroid.y || y > biggestCentroid.y + biggestCentroid.height) && (x < biggestCentroid.x || x > biggestCentroid.x + biggestCentroid.width))
+            if((y < currentCentroid.y || y > currentCentroid.y + currentCentroid.height) && (x < currentCentroid.x || x > currentCentroid.x + currentCentroid.width))
             {
                 //get each positive pixel
                 if(ROI[y*ROIWIDTH + x] > 0)
@@ -194,15 +191,15 @@ Centroid_t detectCentroids(std::vector<unsigned char> ROI)
                     }
                     if(centroidSum > 0)
                     {
-                        if(centroidSum > biggestCentroid.sum)
-                        {
-                            biggestCentroid.sum = centroidSum;
-                            biggestCentroid.width = xBoundHigh - xBoundLow - 1;
-                            biggestCentroid.height = yBoundHigh - yBoundLow - 1;
-                            biggestCentroid.x = xBoundLow;// - biggestCentroid.width/2;
-                            biggestCentroid.y = yBoundLow;// - biggestCentroid.height/2;
-                            biggestCentroid.present = 1;
-                        }
+                        currentCentroid.sum = centroidSum;
+                        currentCentroid.width = xBoundHigh - xBoundLow - 1;
+                        currentCentroid.height = yBoundHigh - yBoundLow - 1;
+                        currentCentroid.x = xBoundLow;// - currentCentroid.width/2;
+                        currentCentroid.y = yBoundLow;// - currentCentroid.height/2;
+                        currentCentroid.size = currentCentroid.width * currentCentroid.height;
+                        currentCentroid.present = 1;
+                        
+                        centroids.push_back(currentCentroid);
                     }
                     
                 }
@@ -211,8 +208,52 @@ Centroid_t detectCentroids(std::vector<unsigned char> ROI)
         }
         
     }
-    std::cout << "Pixels Processed: " << tmp << std::endl;
-    return biggestCentroid;
+    std::cout << "Centroids Processed: " << tmp << std::endl;
+    return centroids;
+}
+
+Centroid_t getBestCentroid(std::vector<unsigned char> ROI, Centroid_t tgtCentroid, int newTrack)
+{
+    std::vector<Centroid_t> centroids;
+    Centroid_t bestCentroid = {};
+    float wTolerance = 0.25;
+    float hTolerance = 0.25;
+    float wTolHigh = tgtCentroid.width + (float)tgtCentroid.width*wTolerance;
+    float wTolLow = tgtCentroid.width - (float)tgtCentroid.width*wTolerance;
+    float hTolHigh = tgtCentroid.height + (float)tgtCentroid.height*hTolerance;
+    float hTolLow = tgtCentroid.height - (float)tgtCentroid.height*hTolerance;
+
+    
+    centroids = detectCentroids(ROI);
+    
+    if(!centroids.empty())
+    {
+        if(newTrack || tgtCentroid.size == 0)
+        {
+            //return biggest centroid
+            for(int i = 0; i < centroids.size(); i++)
+            {
+                if(centroids[i].size > bestCentroid.size)
+                {
+                    bestCentroid = centroids[i];
+                }
+            }
+        }
+        else
+        {
+            bestCentroid = {};
+            for(int i = 0; i < centroids.size(); i++)
+            {
+                if((centroids[i].width >= wTolLow && centroids[i].width <= wTolHigh) && (centroids[i].height >= hTolLow && centroids[i].height <= hTolHigh))
+                {
+                    bestCentroid = centroids[i];
+                }
+            }
+            
+        }
+    }
+    
+    return bestCentroid;
 }
 
 int main(int argc, char *argv[])
@@ -240,6 +281,10 @@ int main(int argc, char *argv[])
     float threshFactor = 0.70;
     float fps;
     int frame = 0;
+    
+    Centroid_t tgtCentroid = {};
+    Centroid_t trackedCentroid = {};
+    int newTrack = 1;
     
     
     
@@ -552,20 +597,26 @@ int main(int argc, char *argv[])
             queue.finish();
             queue.enqueueReadBuffer(d_ROI, CL_TRUE, 0, sizeof(unsigned char) * h_ROI_data.size(), h_ROI_data.data());
             
-            Centroid_t centroid = detectCentroids(h_ROI_data);
-            if(centroid.present)
+            //Centroid_t trackedCentroid = detectCentroids(h_ROI_data);
+            trackedCentroid = getBestCentroid(h_ROI_data, tgtCentroid, newTrack);
+            if(trackedCentroid.present)
             {
                TRKmode = TRK;
-                ROI.xTGT = centroid.x;// - centroid.width/2;
-                ROI.yTGT = centroid.y;// - centroid.height/2;
-                ROI.wTGT = centroid.width;
-                ROI.hTGT = centroid.height;
-                ROI.x = (centroid.x + ROI.x) - ROI.size/2 + ROI.wTGT/2;
-                ROI.y = (centroid.y + ROI.y) - ROI.size/2 + ROI.hTGT/2;
+                ROI.xTGT = trackedCentroid.x;// - trackedCentroid.width/2;
+                ROI.yTGT = trackedCentroid.y;// - trackedCentroid.height/2;
+                ROI.wTGT = trackedCentroid.width;
+                ROI.hTGT = trackedCentroid.height;
+                ROI.x = (trackedCentroid.x + ROI.x) - ROI.size/2 + ROI.wTGT/2;
+                ROI.y = (trackedCentroid.y + ROI.y) - ROI.size/2 + ROI.hTGT/2;
                 if(ROI.x > WIDTH-ROI.size) ROI.x = WIDTH-ROI.size;
                 if(ROI.x < 0) ROI.x = 0;
                 if(ROI.y > HEIGHT - ROI.size) ROI.y = HEIGHT - ROI.size;
                 if(ROI.y < 0) ROI.y = 0;
+                if(trackedCentroid.width > MINCENTWIDTH && trackedCentroid.height > MINCENTHEIGHT)
+                {
+                    newTrack = 0;
+                    tgtCentroid = trackedCentroid;
+                }
                 
             }
             
@@ -573,7 +624,12 @@ int main(int argc, char *argv[])
             else TRKmode = ACQ;
         }
         
-        
+        if(TRKmode == IDL)
+        {
+            trackedCentroid = {};
+            tgtCentroid = {};
+            newTrack = 1;
+        }
         
         //------------Detect the centroids-----------//
         
