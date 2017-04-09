@@ -26,9 +26,18 @@
 #define TRK 2
 
 #define SHOWDEBUG 0
+#define PRINTROI 0
 
 #define MINCENTWIDTH 5
 #define MINCENTHEIGHT 5
+
+#define ACQDURATION 20
+#define REACQTIME 15
+#define GROWTIME 3
+
+#define THRESHFACTOR 0.66
+
+#define HISTORYLENGTH 10
 
 
 
@@ -54,12 +63,13 @@ struct ROI_t {
 } ROI;
 
 struct Centroid_t {
-    int x;
-    int y;
-    int width;
-    int height;
-    int sum;
-    int size;
+    float x;
+    float y;
+    float width;
+    float height;
+    float sum;
+    float size;
+    float mean;
     int present;
 };
 
@@ -120,7 +130,7 @@ std::vector<Centroid_t> detectCentroids(std::vector<unsigned char> ROI)
     int yBoundHigh = 0;
     int tmp = 0;
     
-    if(SHOWDEBUG)
+    if(PRINTROI)
     {
         for(int y = 0; y < ROIHEIGHT; y++)
         {
@@ -197,6 +207,7 @@ std::vector<Centroid_t> detectCentroids(std::vector<unsigned char> ROI)
                         currentCentroid.x = xBoundLow;// - currentCentroid.width/2;
                         currentCentroid.y = yBoundLow;// - currentCentroid.height/2;
                         currentCentroid.size = currentCentroid.width * currentCentroid.height;
+                        currentCentroid.mean = (currentCentroid.sum/currentCentroid.size)*255;
                         currentCentroid.present = 1;
                         
                         centroids.push_back(currentCentroid);
@@ -208,23 +219,63 @@ std::vector<Centroid_t> detectCentroids(std::vector<unsigned char> ROI)
         }
         
     }
-    std::cout << "Centroids Processed: " << tmp << std::endl;
+    //std::cout << "Centroids Processed: " << tmp << std::endl;
     return centroids;
 }
 
-Centroid_t getBestCentroid(std::vector<unsigned char> ROI, Centroid_t tgtCentroid, int newTrack)
+Centroid_t getBestCentroid(std::vector<unsigned char> ROI, Centroid_t tgtCentroid, int newTrack, int reAqcAtmpt)
 {
     std::vector<Centroid_t> centroids;
     Centroid_t bestCentroid = {};
-    float wTolerance = 0.25;
-    float hTolerance = 0.25;
-    float wTolHigh = tgtCentroid.width + (float)tgtCentroid.width*wTolerance;
-    float wTolLow = tgtCentroid.width - (float)tgtCentroid.width*wTolerance;
-    float hTolHigh = tgtCentroid.height + (float)tgtCentroid.height*hTolerance;
-    float hTolLow = tgtCentroid.height - (float)tgtCentroid.height*hTolerance;
+    float xTolerance = 20;
+    float yTolerance = 20;
+    float wTolerance = 0.33;
+    float hTolerance = 0.33;
+    float sumTolerance = 0.25;
+    float meanTolerance = 0.5;
+    
+    
+    if(reAqcAtmpt > GROWTIME)
+    {
+        xTolerance = xTolerance + (reAqcAtmpt-GROWTIME)+10;
+        yTolerance = yTolerance + (reAqcAtmpt-GROWTIME)+10;
+        wTolerance = wTolerance + (reAqcAtmpt-GROWTIME)*0.1;
+        hTolerance = hTolerance + (reAqcAtmpt-GROWTIME)*0.1;
+        sumTolerance = sumTolerance + (reAqcAtmpt-GROWTIME)*0.1;
+        meanTolerance = meanTolerance + (reAqcAtmpt-GROWTIME)*0.1;
+        
+        std::cout << "LOOSENING TOLERANCES: " << (reAqcAtmpt-GROWTIME) << std::endl;
+    }
+    
+
+    float xTolHigh = tgtCentroid.x + xTolerance;
+    float xTolLow = tgtCentroid.x - xTolerance;
+    float yTolHigh = tgtCentroid.y + yTolerance;
+    float yTolLow = tgtCentroid.y - yTolerance;
+    float wTolHigh = tgtCentroid.width + tgtCentroid.width*wTolerance;
+    float wTolLow = tgtCentroid.width - tgtCentroid.width*wTolerance;
+    float hTolHigh = tgtCentroid.height + tgtCentroid.height*hTolerance;
+    float hTolLow = tgtCentroid.height - tgtCentroid.height*hTolerance;
+    float sumTolHigh = tgtCentroid.sum + tgtCentroid.sum*sumTolerance;
+    float sumTolLow = tgtCentroid.sum - tgtCentroid.sum*sumTolerance;
+    float meanTolHigh = tgtCentroid.mean + tgtCentroid.mean*meanTolerance;
+    float meanTolLow = tgtCentroid.mean - tgtCentroid.mean*meanTolerance;
+    
+
 
     
     centroids = detectCentroids(ROI);
+    
+    if(SHOWDEBUG)
+    {
+        std::cout << "TOLERANCES - width: " << wTolerance << " height: " << hTolerance << " mean: " << meanTolerance << std::endl;
+        std::cout << "TGT CENT - width: " << tgtCentroid.width << " height: " << tgtCentroid.height << " mean: " << tgtCentroid.mean << std::endl;
+        std::cout << "CENTROIDS - " << std::endl;
+        for(int i = 0; i < centroids.size(); i++)
+        {
+            std::cout << "c" << i << " width: " << centroids[i].width << " height: " << centroids[i].height << " mean: " << centroids[i].mean <<  std::endl;
+        }
+    }
     
     if(!centroids.empty())
     {
@@ -244,13 +295,50 @@ Centroid_t getBestCentroid(std::vector<unsigned char> ROI, Centroid_t tgtCentroi
             bestCentroid = {};
             for(int i = 0; i < centroids.size(); i++)
             {
-                if((centroids[i].width >= wTolLow && centroids[i].width <= wTolHigh) && (centroids[i].height >= hTolLow && centroids[i].height <= hTolHigh))
+                if(centroids[i].width >= wTolLow && centroids[i].width <= wTolHigh)
                 {
-                    bestCentroid = centroids[i];
+                    if(centroids[i].height >= hTolLow && centroids[i].height <= hTolHigh)
+                    {
+                        if(centroids[i].x >= xTolLow && centroids[i].x <= xTolHigh)
+                        {
+                            if(centroids[i].y >= yTolLow && centroids[i].y <= yTolHigh)
+                            {
+                                if(centroids[i].mean >= meanTolLow && centroids[i].mean <= meanTolHigh)
+                                {
+                                    bestCentroid = centroids[i];
+                                }
+                                else
+                                {
+                                    std::cout << "REJECTED - MEAN H: " << meanTolHigh << " L: " << meanTolLow << " A: " << centroids[i].mean << std::endl;
+                                }
+                            }
+                            else
+                            {
+                                std::cout << "REJECTED - Y H: " << yTolHigh << " L: " << yTolLow << " A: " << centroids[i].y << std::endl;
+                            }
+                        }
+                        else
+                        {
+                            std::cout << "REJECTED - X H: " << xTolHigh << " L: " << xTolLow << " A: " << centroids[i].x << std::endl;
+                        }
+                    }
+                    else
+                    {
+                        std::cout << "REJECTED - HEIGHT H: " << hTolHigh << " L: " << hTolLow << " A: " << centroids[i].height << std::endl;
+                    }
+                }
+                else
+                {
+                    std::cout << "REJECTED - WIDTH H: " << wTolHigh << " L: " << wTolLow << " A: " << centroids[i].width << std::endl;
                 }
             }
             
         }
+    }
+    
+    if(SHOWDEBUG)
+    {
+        std::cout << "BEST MATCH - width: " << bestCentroid.width << " height " << bestCentroid.height << " mean: " << bestCentroid.mean << std::endl;
     }
     
     return bestCentroid;
@@ -278,13 +366,25 @@ int main(int argc, char *argv[])
     
     int sum, max;
     float mean, thresh;
-    float threshFactor = 0.70;
+    float threshFactor = THRESHFACTOR;
     float fps;
     int frame = 0;
     
     Centroid_t tgtCentroid = {};
     Centroid_t trackedCentroid = {};
     int newTrack = 1;
+    int acqCount= 0;
+    
+    std::vector<Centroid_t> trkHistory(HISTORYLENGTH);
+    int histHead = 0;
+    int histReady = 0;
+    float xSumHist = 0;
+    float ySumHist = 0;
+    float wSumHist = 0;
+    float hSumHist = 0;
+    float sumSumHist = 0;
+    float meanSumHist = 0;
+    float sizeSumHist = 0;
     
     
     
@@ -527,33 +627,104 @@ int main(int argc, char *argv[])
             queue.enqueueCopyBuffer(d_frame_out, d_frame_in, 0, 0, sizeof(unsigned char)*h_frame_in.size());
         }
             
+//        if(enBinarise == 1)
+//        {
+//            queue.enqueueReadBuffer(d_frame_in, CL_TRUE, 0, sizeof(unsigned char)*h_frame_in.size(), h_frame_in.data());
+//
+//            sum = 0;
+//            max = 0;
+//            for (y = 0; y < height; y++)
+//            {
+//                for (x = 0; x < width; x++)
+//                {
+//                    sum += h_frame_in[y*width + x];
+//                    if(h_frame_in[y*width + x] > max) max = h_frame_in[y*width + x];
+//                }
+//            }
+//
+//            mean = sum/(width*height);
+//            thresh = mean+((max-mean)*threshFactor);
+//
+//
+//            binKernel.setArg(0, d_frame_in);
+//            binKernel.setArg(1, d_frame_out);
+//            binKernel.setArg(2, width);
+//            binKernel.setArg(3, height);
+//            binKernel.setArg(4, (unsigned char)thresh);
+//            
+//            queue.enqueueNDRangeKernel(binKernel, cl::NullRange, cl::NDRange(width, height),cl::NullRange, NULL, NULL);
+//            queue.finish();
+//        }
         if(enBinarise == 1)
         {
-            queue.enqueueReadBuffer(d_frame_in, CL_TRUE, 0, sizeof(unsigned char)*h_frame_in.size(), h_frame_in.data());
-
-            sum = 0;
-            max = 0;
-            for (y = 0; y < height; y++)
+            //searching for centroid then get the threshold from there. Else use full frame
+//            if(TRKmode == TRK || TRKmode == ACQ)
+//            {
+//                extractKernel.setArg(0, d_frame_out);
+//                extractKernel.setArg(1, d_ROI);
+//                extractKernel.setArg(2, width);
+//                extractKernel.setArg(3, height);
+//                extractKernel.setArg(4, ROI.x);
+//                extractKernel.setArg(5, ROI.y);
+//                extractKernel.setArg(6, ROIWIDTH);
+//                extractKernel.setArg(7, ROIHEIGHT);
+//                
+//                queue.enqueueNDRangeKernel(extractKernel, cl::NullRange, cl::NDRange(width, height), cl::NullRange, NULL, NULL);
+//                queue.finish();
+//                queue.enqueueReadBuffer(d_ROI, CL_TRUE, 0, sizeof(unsigned char) * h_ROI_data.size(), h_ROI_data.data());
+//                
+//                sum = 0;
+//                max = 0;
+//                for (y = 0; y < ROIHEIGHT; y++)
+//                {
+//                    for (x = 0; x < ROIWIDTH; x++)
+//                    {
+//                        sum += h_ROI_data[y*ROIWIDTH + x];
+//                        if(h_ROI_data[y*ROIWIDTH + x] > max) max = h_ROI_data[y*ROIWIDTH + x];
+//                    }
+//                }
+//                
+//                mean = sum/(ROIWIDTH*ROIHEIGHT);
+//                thresh = mean+((max-mean)*threshFactor);
+//                
+//                binKernel.setArg(0, d_frame_in);
+//                binKernel.setArg(1, d_frame_out);
+//                binKernel.setArg(2, width);
+//                binKernel.setArg(3, height);
+//                binKernel.setArg(4, (unsigned char)thresh);
+//
+//                queue.enqueueNDRangeKernel(binKernel, cl::NullRange, cl::NDRange(width, height),cl::NullRange, NULL, NULL);
+//                queue.finish();
+//            }
+//            else
             {
-                for (x = 0; x < width; x++)
+                queue.enqueueReadBuffer(d_frame_in, CL_TRUE, 0, sizeof(unsigned char)*h_frame_in.size(), h_frame_in.data());
+    
+                sum = 0;
+                max = 0;
+                for (y = 0; y < height; y++)
                 {
-                    sum += h_frame_in[y*width + x];
-                    if(h_frame_in[y*width + x] > max) max = h_frame_in[y*width + x];
+                    for (x = 0; x < width; x++)
+                    {
+                        sum += h_frame_in[y*width + x];
+                        if(h_frame_in[y*width + x] > max) max = h_frame_in[y*width + x];
+                    }
                 }
+    
+                mean = sum/(width*height);
+                thresh = mean+((max-mean)*threshFactor);
+    
+    
+                binKernel.setArg(0, d_frame_in);
+                binKernel.setArg(1, d_frame_out);
+                binKernel.setArg(2, width);
+                binKernel.setArg(3, height);
+                binKernel.setArg(4, (unsigned char)thresh);
+                
+                queue.enqueueNDRangeKernel(binKernel, cl::NullRange, cl::NDRange(width, height),cl::NullRange, NULL, NULL);
+                queue.finish();
             }
-
-            mean = sum/(width*height);
-            thresh = mean+((max-mean)*threshFactor);
-
-
-            binKernel.setArg(0, d_frame_in);
-            binKernel.setArg(1, d_frame_out);
-            binKernel.setArg(2, width);
-            binKernel.setArg(3, height);
-            binKernel.setArg(4, (unsigned char)thresh);
             
-            queue.enqueueNDRangeKernel(binKernel, cl::NullRange, cl::NDRange(width, height),cl::NullRange, NULL, NULL);
-            queue.finish();
         }
         else
         {
@@ -598,7 +769,7 @@ int main(int argc, char *argv[])
             queue.enqueueReadBuffer(d_ROI, CL_TRUE, 0, sizeof(unsigned char) * h_ROI_data.size(), h_ROI_data.data());
             
             //Centroid_t trackedCentroid = detectCentroids(h_ROI_data);
-            trackedCentroid = getBestCentroid(h_ROI_data, tgtCentroid, newTrack);
+            trackedCentroid = getBestCentroid(h_ROI_data, tgtCentroid, newTrack, acqCount);
             if(trackedCentroid.present)
             {
                TRKmode = TRK;
@@ -612,23 +783,103 @@ int main(int argc, char *argv[])
                 if(ROI.x < 0) ROI.x = 0;
                 if(ROI.y > HEIGHT - ROI.size) ROI.y = HEIGHT - ROI.size;
                 if(ROI.y < 0) ROI.y = 0;
+                
+                //only collect history about centroids above a certain size
                 if(trackedCentroid.width > MINCENTWIDTH && trackedCentroid.height > MINCENTHEIGHT)
                 {
                     newTrack = 0;
-                    tgtCentroid = trackedCentroid;
+                    
+                    trkHistory[histHead] = trackedCentroid;
+                    
+                    histHead = (histHead+1) % HISTORYLENGTH;
+                    if(histHead == 9) histReady = 1;
+                    
+                    if(histReady)
+                    {
+                        xSumHist = 0;
+                        ySumHist = 0;
+                        wSumHist = 0;
+                        hSumHist = 0;
+                        sumSumHist = 0;
+                        meanSumHist = 0;
+                        sizeSumHist = 0;
+                        for(int i = 0; i < HISTORYLENGTH; i++)
+                        {
+                            xSumHist += trkHistory[i].x;
+                            ySumHist += trkHistory[i].y;
+                            wSumHist += trkHistory[i].width;
+                            hSumHist += trkHistory[i].height;
+                            sumSumHist += trkHistory[i].sum;
+                            meanSumHist += trkHistory[i].mean;
+                            sizeSumHist += trkHistory[i].size;
+                        }
+//                        tgtCentroid.x = xSumHist/HISTORYLENGTH;
+//                        tgtCentroid.y = ySumHist/HISTORYLENGTH;
+                        tgtCentroid.x = trackedCentroid.x;
+                        tgtCentroid.y = trackedCentroid.y;
+                        tgtCentroid.width = wSumHist/HISTORYLENGTH;
+                        tgtCentroid.height = hSumHist/HISTORYLENGTH;
+                        tgtCentroid.sum = sumSumHist/HISTORYLENGTH;
+                        tgtCentroid.mean = meanSumHist/HISTORYLENGTH;
+                        tgtCentroid.size = sizeSumHist/HISTORYLENGTH;
+                    }
+                    else
+                    {
+                        tgtCentroid = trackedCentroid;
+                    }
+                }
+                else
+                {
+                    newTrack = 1;
+                    tgtCentroid = {};
                 }
                 
             }
             
             
-            else TRKmode = ACQ;
+            else
+            {
+                TRKmode = ACQ;
+            }
         }
         
+        if(TRKmode == ACQ)
+        {
+            acqCount++;
+            if(acqCount > REACQTIME)
+            {
+                tgtCentroid = {};
+                trackedCentroid = {};
+                newTrack = 1;
+            }
+            if(acqCount > ACQDURATION)
+            {
+                TRKmode = IDL;
+            }
+            if(acqCount > GROWTIME)
+            {
+                for(int i = 0; i < HISTORYLENGTH; i++)
+                {
+                    trkHistory[i] = trackedCentroid;
+                }
+                histReady = 0;
+            }
+        }
         if(TRKmode == IDL)
         {
+            acqCount = 0;
             trackedCentroid = {};
             tgtCentroid = {};
             newTrack = 1;
+            for(int i = 0; i < HISTORYLENGTH; i++)
+            {
+                trkHistory[i] = trackedCentroid;
+            }
+            histReady = 0;
+        }
+        if(TRKmode == TRK)
+        {
+            acqCount = 0;
         }
         
         //------------Detect the centroids-----------//
