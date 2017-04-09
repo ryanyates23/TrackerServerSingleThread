@@ -10,11 +10,11 @@
             ignoreCount = "0"
             continueAfterRunningActions = "No"
             filePath = "TrackerServerSingleThread/main.cpp"
-            timestampString = "513377504.197082"
+            timestampString = "513438632.111694"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "755"
-            endingLineNumber = "755"
+            startingLineNumber = "770"
+            endingLineNumber = "770"
             landmarkName = "main(int argc, char *argv[])"
             landmarkType = "9">
          </BreakpointContent>
@@ -26,11 +26,11 @@
             ignoreCount = "0"
             continueAfterRunningActions = "No"
             filePath = "TrackerServerSingleThread/main.cpp"
-            timestampString = "513362511.613364"
+            timestampString = "513433262.24234"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "223"
-            endingLineNumber = "223"
+            startingLineNumber = "227"
+            endingLineNumber = "227"
             landmarkName = "detectCentroids(std::vector&lt;unsigned char&gt; ROI)"
             landmarkType = "9">
          </BreakpointContent>
@@ -42,11 +42,11 @@
             ignoreCount = "0"
             continueAfterRunningActions = "No"
             filePath = "TrackerServerSingleThread/main.cpp"
-            timestampString = "513377971.403565"
+            timestampString = "513438632.111694"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "914"
-            endingLineNumber = "914"
+            startingLineNumber = "961"
+            endingLineNumber = "961"
             landmarkName = "main(int argc, char *argv[])"
             landmarkType = "9">
          </BreakpointContent>
@@ -58,11 +58,11 @@
             ignoreCount = "0"
             continueAfterRunningActions = "No"
             filePath = "TrackerServerSingleThread/main.cpp"
-            timestampString = "513377504.197082"
+            timestampString = "513438632.111694"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "782"
-            endingLineNumber = "782"
+            startingLineNumber = "799"
+            endingLineNumber = "799"
             landmarkName = "main(int argc, char *argv[])"
             landmarkType = "9">
          </BreakpointContent>
@@ -74,11 +74,11 @@
             ignoreCount = "0"
             continueAfterRunningActions = "No"
             filePath = "TrackerServerSingleThread/main.cpp"
-            timestampString = "513377300.213087"
+            timestampString = "513438632.111694"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "282"
-            endingLineNumber = "282"
+            startingLineNumber = "292"
+            endingLineNumber = "292"
             landmarkName = "getBestCentroid(std::vector&lt;unsigned char&gt; ROI, Centroid_t tgtCentroid, int newTrack, int reAqcAtmpt)"
             landmarkType = "9">
          </BreakpointContent>
@@ -90,11 +90,11 @@
             ignoreCount = "0"
             continueAfterRunningActions = "No"
             filePath = "TrackerServerSingleThread/main.cpp"
-            timestampString = "513377504.197082"
+            timestampString = "513438632.111694"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "344"
-            endingLineNumber = "344"
+            startingLineNumber = "356"
+            endingLineNumber = "356"
             landmarkName = "getBestCentroid(std::vector&lt;unsigned char&gt; ROI, Centroid_t tgtCentroid, int newTrack, int reAqcAtmpt)"
             landmarkType = "9">
          </BreakpointContent>
@@ -106,11 +106,11 @@
             ignoreCount = "0"
             continueAfterRunningActions = "No"
             filePath = "TrackerServerSingleThread/main.cpp"
-            timestampString = "513377300.213087"
+            timestampString = "513438632.111694"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "289"
-            endingLineNumber = "289"
+            startingLineNumber = "299"
+            endingLineNumber = "299"
             landmarkName = "getBestCentroid(std::vector&lt;unsigned char&gt; ROI, Centroid_t tgtCentroid, int newTrack, int reAqcAtmpt)"
             landmarkType = "9">
          </BreakpointContent>
@@ -122,11 +122,11 @@
             ignoreCount = "0"
             continueAfterRunningActions = "No"
             filePath = "TrackerServerSingleThread/main.cpp"
-            timestampString = "513377300.213087"
+            timestampString = "513438632.111694"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "295"
-            endingLineNumber = "295"
+            startingLineNumber = "305"
+            endingLineNumber = "305"
             landmarkName = "getBestCentroid(std::vector&lt;unsigned char&gt; ROI, Centroid_t tgtCentroid, int newTrack, int reAqcAtmpt)"
             landmarkType = "9">
          </BreakpointContent>
@@ -138,11 +138,11 @@
             ignoreCount = "0"
             continueAfterRunningActions = "No"
             filePath = "TrackerServerSingleThread/main.cpp"
-            timestampString = "513377971.403565"
+            timestampString = "513438632.111694"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "842"
-            endingLineNumber = "842"
+            startingLineNumber = "881"
+            endingLineNumber = "881"
             landmarkName = "main(int argc, char *argv[])"
             landmarkType = "9">
          </BreakpointContent>
@@ -154,11 +154,11 @@
             ignoreCount = "0"
             continueAfterRunningActions = "No"
             filePath = "TrackerServerSingleThread/main.cpp"
-            timestampString = "513377971.403565"
+            timestampString = "513438632.111694"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "857"
-            endingLineNumber = "857"
+            startingLineNumber = "897"
+            endingLineNumber = "897"
             landmarkName = "main(int argc, char *argv[])"
             landmarkType = "9">
          </BreakpointContent>
@@ -170,11 +170,11 @@
             ignoreCount = "0"
             continueAfterRunningActions = "No"
             filePath = "TrackerServerSingleThread/main.cpp"
-            timestampString = "513377504.197082"
+            timestampString = "513438632.111694"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "752"
-            endingLineNumber = "752"
+            startingLineNumber = "767"
+            endingLineNumber = "767"
             landmarkName = "main(int argc, char *argv[])"
             landmarkType = "9">
          </BreakpointContent>
@@ -186,11 +186,11 @@
             ignoreCount = "0"
             continueAfterRunningActions = "No"
             filePath = "TrackerServerSingleThread/main.cpp"
-            timestampString = "513377971.403565"
+            timestampString = "513438632.111694"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "879"
-            endingLineNumber = "879"
+            startingLineNumber = "926"
+            endingLineNumber = "926"
             landmarkName = "main(int argc, char *argv[])"
             landmarkType = "9">
          </BreakpointContent>
@@ -202,11 +202,11 @@
             ignoreCount = "0"
             continueAfterRunningActions = "No"
             filePath = "TrackerServerSingleThread/main.cpp"
-            timestampString = "513377504.197082"
+            timestampString = "513438632.111694"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "792"
-            endingLineNumber = "792"
+            startingLineNumber = "810"
+            endingLineNumber = "810"
             landmarkName = "main(int argc, char *argv[])"
             landmarkType = "9">
          </BreakpointContent>
@@ -218,11 +218,43 @@
             ignoreCount = "0"
             continueAfterRunningActions = "No"
             filePath = "TrackerServerSingleThread/main.cpp"
-            timestampString = "513377971.403565"
+            timestampString = "513438632.111694"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "824"
-            endingLineNumber = "824"
+            startingLineNumber = "837"
+            endingLineNumber = "837"
+            landmarkName = "main(int argc, char *argv[])"
+            landmarkType = "9">
+         </BreakpointContent>
+      </BreakpointProxy>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            shouldBeEnabled = "No"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "TrackerServerSingleThread/main.cpp"
+            timestampString = "513438632.111694"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "863"
+            endingLineNumber = "863"
+            landmarkName = "main(int argc, char *argv[])"
+            landmarkType = "9">
+         </BreakpointContent>
+      </BreakpointProxy>
+      <BreakpointProxy
+         BreakpointExtensionID = "Xcode.Breakpoint.FileBreakpoint">
+         <BreakpointContent
+            shouldBeEnabled = "No"
+            ignoreCount = "0"
+            continueAfterRunningActions = "No"
+            filePath = "TrackerServerSingleThread/main.cpp"
+            timestampString = "513438632.111694"
+            startingColumnNumber = "9223372036854775807"
+            endingColumnNumber = "9223372036854775807"
+            startingLineNumber = "859"
+            endingLineNumber = "859"
             landmarkName = "main(int argc, char *argv[])"
             landmarkType = "9">
          </BreakpointContent>

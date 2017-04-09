@@ -37,7 +37,7 @@
 
 #define THRESHFACTOR 0.66
 
-#define HISTORYLENGTH 10
+#define HISTORYLENGTH 20
 
 
 
@@ -70,6 +70,10 @@ struct Centroid_t {
     float sum;
     float size;
     float mean;
+    float xVel;
+    float yVel;
+    int offsetROIX;
+    int offsetROIY;
     int present;
 };
 
@@ -234,6 +238,10 @@ Centroid_t getBestCentroid(std::vector<unsigned char> ROI, Centroid_t tgtCentroi
     float sumTolerance = 0.25;
     float meanTolerance = 0.5;
     
+    float closestX = 0;
+    float closestY = 0;
+
+    
     
     if(reAqcAtmpt > GROWTIME)
     {
@@ -246,6 +254,11 @@ Centroid_t getBestCentroid(std::vector<unsigned char> ROI, Centroid_t tgtCentroi
         
         std::cout << "LOOSENING TOLERANCES: " << (reAqcAtmpt-GROWTIME) << std::endl;
     }
+    
+    //Guess tgts next position based off last position and average velocity
+    //Also centre search down last known path of the target
+    tgtCentroid.x += (reAqcAtmpt + 1)*tgtCentroid.xVel;
+    tgtCentroid.y += (reAqcAtmpt + 1)*tgtCentroid.yVel;
     
 
     float xTolHigh = tgtCentroid.x + xTolerance;
@@ -341,6 +354,8 @@ Centroid_t getBestCentroid(std::vector<unsigned char> ROI, Centroid_t tgtCentroi
         std::cout << "BEST MATCH - width: " << bestCentroid.width << " height " << bestCentroid.height << " mean: " << bestCentroid.mean << std::endl;
     }
     
+    //std::cout << "PREDICTED POS - x: " << tgtCentroid.x << " y: " << tgtCentroid.y << " ACTUAL POS - x: " << bestCentroid.x << " y: " << bestCentroid.y << std::endl;
+    
     return bestCentroid;
 }
 
@@ -376,6 +391,7 @@ int main(int argc, char *argv[])
     int acqCount= 0;
     
     std::vector<Centroid_t> trkHistory(HISTORYLENGTH);
+    int framesTracked = 0;
     int histHead = 0;
     int histReady = 0;
     float xSumHist = 0;
@@ -385,6 +401,8 @@ int main(int argc, char *argv[])
     float sumSumHist = 0;
     float meanSumHist = 0;
     float sizeSumHist = 0;
+    float xVelSumHist = 0;
+    float yVelSumHist = 0;
     
     
     
@@ -773,6 +791,8 @@ int main(int argc, char *argv[])
             if(trackedCentroid.present)
             {
                TRKmode = TRK;
+                trackedCentroid.offsetROIX = ROI.x + trackedCentroid.x;
+                trackedCentroid.offsetROIY = ROI.y + trackedCentroid.y;
                 ROI.xTGT = trackedCentroid.x;// - trackedCentroid.width/2;
                 ROI.yTGT = trackedCentroid.y;// - trackedCentroid.height/2;
                 ROI.wTGT = trackedCentroid.width;
@@ -788,11 +808,12 @@ int main(int argc, char *argv[])
                 if(trackedCentroid.width > MINCENTWIDTH && trackedCentroid.height > MINCENTHEIGHT)
                 {
                     newTrack = 0;
+                    framesTracked++;
                     
                     trkHistory[histHead] = trackedCentroid;
                     
                     histHead = (histHead+1) % HISTORYLENGTH;
-                    if(histHead == 9) histReady = 1;
+                    if(framesTracked > HISTORYLENGTH) histReady = 1;
                     
                     if(histReady)
                     {
@@ -803,6 +824,16 @@ int main(int argc, char *argv[])
                         sumSumHist = 0;
                         meanSumHist = 0;
                         sizeSumHist = 0;
+                        xVelSumHist = 0;
+                        yVelSumHist = 0;
+
+                        //calculate velocities
+                        for(int i = 0; i < HISTORYLENGTH; i++)
+                        {
+                            trkHistory[(i+1) % HISTORYLENGTH].xVel = (trkHistory[(i+1) % HISTORYLENGTH].x + trkHistory[i].offsetROIX) - (trkHistory[i].x + trkHistory[i].offsetROIX);
+                            trkHistory[(i+1) % HISTORYLENGTH].yVel = (trkHistory[(i+1) % HISTORYLENGTH].y + trkHistory[i].offsetROIY) - (trkHistory[i].y + trkHistory[i].offsetROIY);
+                        }
+                        
                         for(int i = 0; i < HISTORYLENGTH; i++)
                         {
                             xSumHist += trkHistory[i].x;
@@ -812,9 +843,13 @@ int main(int argc, char *argv[])
                             sumSumHist += trkHistory[i].sum;
                             meanSumHist += trkHistory[i].mean;
                             sizeSumHist += trkHistory[i].size;
+                            xVelSumHist += trkHistory[i].xVel;
+                            yVelSumHist += trkHistory[i].yVel;
                         }
 //                        tgtCentroid.x = xSumHist/HISTORYLENGTH;
 //                        tgtCentroid.y = ySumHist/HISTORYLENGTH;
+                        tgtCentroid.xVel = xVelSumHist/HISTORYLENGTH;
+                        tgtCentroid.yVel = yVelSumHist/HISTORYLENGTH;
                         tgtCentroid.x = trackedCentroid.x;
                         tgtCentroid.y = trackedCentroid.y;
                         tgtCentroid.width = wSumHist/HISTORYLENGTH;
@@ -822,6 +857,13 @@ int main(int argc, char *argv[])
                         tgtCentroid.sum = sumSumHist/HISTORYLENGTH;
                         tgtCentroid.mean = meanSumHist/HISTORYLENGTH;
                         tgtCentroid.size = sizeSumHist/HISTORYLENGTH;
+                        
+                        
+//                        std::cout << "THIS ROI - x: " << ROI.x << " y: " << ROI.y;
+//                        place next ROI based off expected position
+//                        ROI.x = tgtCentroid.x + tgtCentroid.offsetROIX + tgtCentroid.xVel  - ROI.size/2 + ROI.wTGT/2;
+//                        ROI.y = tgtCentroid.y + tgtCentroid.offsetROIY + tgtCentroid.yVel  - ROI.size/2 + ROI.hTGT/2;
+//                        std::cout << " NEXT ROI - x: " << ROI.x << " y: " << ROI.y << std::endl;
                     }
                     else
                     {
@@ -851,6 +893,7 @@ int main(int argc, char *argv[])
                 tgtCentroid = {};
                 trackedCentroid = {};
                 newTrack = 1;
+                framesTracked = 0;
             }
             if(acqCount > ACQDURATION)
             {
@@ -858,12 +901,18 @@ int main(int argc, char *argv[])
             }
             if(acqCount > GROWTIME)
             {
+                //clear history
                 for(int i = 0; i < HISTORYLENGTH; i++)
                 {
                     trkHistory[i] = trackedCentroid;
                 }
                 histReady = 0;
+                framesTracked = 0;
             }
+            
+            //search ahead to try and find the target.
+//            tgtCentroid.x += tgtCentroid.xVel;
+//            tgtCentroid.y += tgtCentroid.yVel;
         }
         if(TRKmode == IDL)
         {
@@ -876,6 +925,7 @@ int main(int argc, char *argv[])
                 trkHistory[i] = trackedCentroid;
             }
             histReady = 0;
+            framesTracked = 0;
         }
         if(TRKmode == TRK)
         {
