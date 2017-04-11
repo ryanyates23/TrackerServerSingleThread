@@ -14,6 +14,7 @@
 #include <iostream>
 #include <vector>
 #include <chrono>
+#include <cmath>
 
 #define WIDTH 1280
 #define HEIGHT 720
@@ -36,8 +37,10 @@
 #define GROWTIME 3
 
 #define THRESHFACTOR 0.66
+#define THRESHUP 1
+#define THRESHDOWN 2
 
-#define HISTORYLENGTH 20
+#define HISTORYLENGTH 10
 
 
 
@@ -227,7 +230,7 @@ std::vector<Centroid_t> detectCentroids(std::vector<unsigned char> ROI)
     return centroids;
 }
 
-Centroid_t getBestCentroid(std::vector<unsigned char> ROI, Centroid_t tgtCentroid, int newTrack, int reAqcAtmpt)
+Centroid_t getBestCentroid(std::vector<unsigned char> ROI, Centroid_t tgtCentroid, int newTrack, int reAqcAtmpt, ROI_t ROIdata)
 {
     std::vector<Centroid_t> centroids;
     Centroid_t bestCentroid = {};
@@ -238,8 +241,13 @@ Centroid_t getBestCentroid(std::vector<unsigned char> ROI, Centroid_t tgtCentroi
     float sumTolerance = 0.25;
     float meanTolerance = 0.5;
     
-    float closestX = 0;
-    float closestY = 0;
+    float xDist = 0;
+    float yDist = 0;
+    float dist = 0;
+    float closestDist = 100000;
+    
+//    tgtCentroid.x = tgtCentroid.x - ROIdata.x;
+//    tgtCentroid.y = tgtCentroid.y - ROIdata.y;
 
     
     
@@ -301,6 +309,13 @@ Centroid_t getBestCentroid(std::vector<unsigned char> ROI, Centroid_t tgtCentroi
                 {
                     bestCentroid = centroids[i];
                 }
+//                xDist = centroids[i].x + centroids[i].width/2 - ROIWIDTH/2;
+//                yDist = centroids[i].x + centroids[i].height/2 - ROIHEIGHT/2;
+//                dist = std::sqrt(xDist*xDist + yDist*yDist);
+//                if(dist < closestDist)
+//                {
+//                    bestCentroid = centroids[i];
+//                }
             }
         }
         else
@@ -322,27 +337,27 @@ Centroid_t getBestCentroid(std::vector<unsigned char> ROI, Centroid_t tgtCentroi
                                 }
                                 else
                                 {
-                                    std::cout << "REJECTED - MEAN H: " << meanTolHigh << " L: " << meanTolLow << " A: " << centroids[i].mean << std::endl;
+                                    //std::cout << "REJECTED - MEAN H: " << meanTolHigh << " L: " << meanTolLow << " A: " << centroids[i].mean << std::endl;
                                 }
                             }
                             else
                             {
-                                std::cout << "REJECTED - Y H: " << yTolHigh << " L: " << yTolLow << " A: " << centroids[i].y << std::endl;
+                                //std::cout << "REJECTED - Y H: " << yTolHigh << " L: " << yTolLow << " A: " << centroids[i].y << std::endl;
                             }
                         }
                         else
                         {
-                            std::cout << "REJECTED - X H: " << xTolHigh << " L: " << xTolLow << " A: " << centroids[i].x << std::endl;
+                            //std::cout << "REJECTED - X H: " << xTolHigh << " L: " << xTolLow << " A: " << centroids[i].x << std::endl;
                         }
                     }
                     else
                     {
-                        std::cout << "REJECTED - HEIGHT H: " << hTolHigh << " L: " << hTolLow << " A: " << centroids[i].height << std::endl;
+                        //std::cout << "REJECTED - HEIGHT H: " << hTolHigh << " L: " << hTolLow << " A: " << centroids[i].height << std::endl;
                     }
                 }
                 else
                 {
-                    std::cout << "REJECTED - WIDTH H: " << wTolHigh << " L: " << wTolLow << " A: " << centroids[i].width << std::endl;
+                    //std::cout << "REJECTED - WIDTH H: " << wTolHigh << " L: " << wTolLow << " A: " << centroids[i].width << std::endl;
                 }
             }
             
@@ -382,6 +397,7 @@ int main(int argc, char *argv[])
     int sum, max;
     float mean, thresh;
     float threshFactor = THRESHFACTOR;
+    unsigned char adjustThresh = 0;
     float fps;
     int frame = 0;
     
@@ -403,6 +419,10 @@ int main(int argc, char *argv[])
     float sizeSumHist = 0;
     float xVelSumHist = 0;
     float yVelSumHist = 0;
+    
+    Centroid_t lastCentroid = {};
+    Centroid_t thisCentroid = {};
+    ROI_t lastROI = {};
     
     
     
@@ -567,6 +587,7 @@ int main(int argc, char *argv[])
         ROI.yLSB = h_frame_in[5];
         //ROI.mode = h_frame_in[6];
         reqTRKmode = h_frame_in[7];
+        adjustThresh = h_frame_in[8];
         
         TRKmode = reqTRKmode;
         
@@ -575,6 +596,21 @@ int main(int argc, char *argv[])
         
         ROI.x = (int)ROI.xMSB*256 + (int)ROI.xLSB;
         ROI.y = (int)ROI.yMSB*256 + (int)ROI.yLSB;
+        
+        lastROI = ROI;
+        
+        
+        //--------------Interpret adjust thresh----------//
+        if(adjustThresh == THRESHUP)
+        {
+            threshFactor += 0.05;
+            std::cout << "New ThreshFactor: " << threshFactor << std::endl;
+        }
+        else if(adjustThresh == THRESHDOWN)
+        {
+            threshFactor -= 0.05;
+            std::cout << "New ThreshFactor: " << threshFactor << std::endl;
+        }
 
         
         //----------------PROCESSING----------------------//
@@ -787,7 +823,7 @@ int main(int argc, char *argv[])
             queue.enqueueReadBuffer(d_ROI, CL_TRUE, 0, sizeof(unsigned char) * h_ROI_data.size(), h_ROI_data.data());
             
             //Centroid_t trackedCentroid = detectCentroids(h_ROI_data);
-            trackedCentroid = getBestCentroid(h_ROI_data, tgtCentroid, newTrack, acqCount);
+            trackedCentroid = getBestCentroid(h_ROI_data, tgtCentroid, newTrack, acqCount, ROI);
             if(trackedCentroid.present)
             {
                TRKmode = TRK;
@@ -809,7 +845,6 @@ int main(int argc, char *argv[])
                 {
                     newTrack = 0;
                     framesTracked++;
-                    
                     trkHistory[histHead] = trackedCentroid;
                     
                     histHead = (histHead+1) % HISTORYLENGTH;
@@ -826,13 +861,31 @@ int main(int argc, char *argv[])
                         sizeSumHist = 0;
                         xVelSumHist = 0;
                         yVelSumHist = 0;
+                        
+                        
 
                         //calculate velocities
-                        for(int i = 0; i < HISTORYLENGTH; i++)
+                        for(int i = histHead; i < (histHead + HISTORYLENGTH-1); i++)
                         {
-                            trkHistory[(i+1) % HISTORYLENGTH].xVel = (trkHistory[(i+1) % HISTORYLENGTH].x + trkHistory[i].offsetROIX) - (trkHistory[i].x + trkHistory[i].offsetROIX);
-                            trkHistory[(i+1) % HISTORYLENGTH].yVel = (trkHistory[(i+1) % HISTORYLENGTH].y + trkHistory[i].offsetROIY) - (trkHistory[i].y + trkHistory[i].offsetROIY);
+                            thisCentroid = trkHistory[i%HISTORYLENGTH];
+                            lastCentroid = trkHistory[(i+HISTORYLENGTH-1)%HISTORYLENGTH];
+                            
+                            trkHistory[i%HISTORYLENGTH].xVel = (thisCentroid.offsetROIX + thisCentroid.width/2) - (lastCentroid.offsetROIX + lastCentroid.width/2);
+                            trkHistory[i%HISTORYLENGTH].yVel = (thisCentroid.offsetROIY + thisCentroid.height/2) - (lastCentroid.offsetROIY + lastCentroid.height/2);
+                            
                         }
+                        
+                        
+//                        trkHistory[histHead].xVel = (trackedCentroid.x + trackedCentroid.offsetROIX) - (trkHistory[(histHead + HISTORYLENGTH -1) %HISTORYLENGTH].x + trkHistory[(histHead + HISTORYLENGTH -1) %HISTORYLENGTH].offsetROIX);
+//                        trkHistory[histHead].yVel = (trackedCentroid.y + trackedCentroid.offsetROIY) - (trkHistory[(histHead + HISTORYLENGTH -1) %HISTORYLENGTH].y + trkHistory[(histHead + HISTORYLENGTH -1) %HISTORYLENGTH].offsetROIY);
+                        
+                        
+//                        tgtCentroid.xVel = ((trkHistory[histHead].x+trkHistory[histHead].offsetROIX+trkHistory[histHead].width/2) - (trkHistory[(histHead + 1) % HISTORYLENGTH].x + trkHistory[(histHead + 1) % HISTORYLENGTH].offsetROIX)+trkHistory[(histHead + 1) % HISTORYLENGTH].width/2)/HISTORYLENGTH;
+//                        tgtCentroid.yVel = ((trkHistory[histHead].y+trkHistory[histHead].offsetROIY) - (trkHistory[(histHead + 1) % HISTORYLENGTH].y + trkHistory[(histHead + 1) % HISTORYLENGTH].offsetROIY))/HISTORYLENGTH;
+                        
+//                        std::cout << "current head: " << histHead << " oldest head: " << (histHead+1) %HISTORYLENGTH << std::endl;
+                        
+                        
                         
                         for(int i = 0; i < HISTORYLENGTH; i++)
                         {
@@ -850,17 +903,19 @@ int main(int argc, char *argv[])
 //                        tgtCentroid.y = ySumHist/HISTORYLENGTH;
                         tgtCentroid.xVel = xVelSumHist/HISTORYLENGTH;
                         tgtCentroid.yVel = yVelSumHist/HISTORYLENGTH;
-                        tgtCentroid.x = trackedCentroid.x;
-                        tgtCentroid.y = trackedCentroid.y;
+                        tgtCentroid.x = trackedCentroid.x - (lastROI.x - ROI.x);
+                        tgtCentroid.y = trackedCentroid.y - (lastROI.y - ROI.y);
                         tgtCentroid.width = wSumHist/HISTORYLENGTH;
                         tgtCentroid.height = hSumHist/HISTORYLENGTH;
                         tgtCentroid.sum = sumSumHist/HISTORYLENGTH;
                         tgtCentroid.mean = meanSumHist/HISTORYLENGTH;
                         tgtCentroid.size = sizeSumHist/HISTORYLENGTH;
                         
+//                        std::cout << "xVel: " << tgtCentroid.xVel << " yVel: " << tgtCentroid.yVel << std::endl;
+                        
                         
 //                        std::cout << "THIS ROI - x: " << ROI.x << " y: " << ROI.y;
-//                        place next ROI based off expected position
+//                        //place next ROI based off expected position
 //                        ROI.x = tgtCentroid.x + tgtCentroid.offsetROIX + tgtCentroid.xVel  - ROI.size/2 + ROI.wTGT/2;
 //                        ROI.y = tgtCentroid.y + tgtCentroid.offsetROIY + tgtCentroid.yVel  - ROI.size/2 + ROI.hTGT/2;
 //                        std::cout << " NEXT ROI - x: " << ROI.x << " y: " << ROI.y << std::endl;
