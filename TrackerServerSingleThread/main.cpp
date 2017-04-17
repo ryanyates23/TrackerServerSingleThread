@@ -36,7 +36,7 @@
 #define REACQTIME 7
 #define GROWTIME 3
 
-#define THRESHFACTOR 0.66
+#define THRESHFACTOR 0.56
 #define THRESHUP 1
 #define THRESHDOWN 2
 
@@ -926,7 +926,7 @@ int main(int argc, char *argv[])
                     }
                     else
                     {
-                        if(framesTracked > 5)
+                        if(framesTracked > 2)
                         {
                             tgtCentroid = trackedCentroid;
                             newTrack = 0;
