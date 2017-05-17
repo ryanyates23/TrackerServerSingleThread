@@ -36,7 +36,7 @@
 #define REACQTIME 7
 #define GROWTIME 3
 
-#define THRESHFACTOR 0.56
+#define THRESHFACTOR 0.66
 #define THRESHUP 1
 #define THRESHDOWN 2
 
@@ -408,6 +408,7 @@ int main(int argc, char *argv[])
     
     std::vector<Centroid_t> trkHistory(HISTORYLENGTH);
     int framesTracked = 0;
+    int totalFramesTracked = 0;
     int histHead = 0;
     int histReady = 0;
     float xSumHist = 0;
@@ -827,6 +828,7 @@ int main(int argc, char *argv[])
             if(trackedCentroid.present)
             {
                 TRKmode = TRK;
+                totalFramesTracked++;
                 trackedCentroid.offsetROIX = ROI.x + trackedCentroid.x;
                 trackedCentroid.offsetROIY = ROI.y + trackedCentroid.y;
                 ROI.xTGT = trackedCentroid.x;// - trackedCentroid.width/2;
@@ -1030,7 +1032,7 @@ int main(int argc, char *argv[])
         fps = 1000000/duration;
         
         //std::cout << fps << std::endl;
-        std::cout << "Frames Tracked: " << framesTracked << std::endl;
+        std::cout << "Frames Tracked: " << totalFramesTracked << std::endl;
 
         
         //----------------TCP Send------------------------//
